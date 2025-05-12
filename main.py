@@ -11,13 +11,19 @@ import os
 
 # Function to load or train a new model
 def load_trained_model():
-    if os.path.exists('model_rf_optimized.joblib'):
-        st.write("Loading Random Forest model from 'model_rf_optimized.joblib'...")
-        model = joblib.load('model_rf_optimized.joblib')
+    if 'model' in st.session_state:
+        st.write("Using previously loaded model from session state.")
+        model = st.session_state['model']
     else:
-        st.write("No model file found. Training a new model...")
-        model = None
+        if os.path.exists('model_rf_optimized.joblib'):
+            st.write("Loading Random Forest model from 'model_rf_optimized.joblib'...")
+            model = joblib.load('model_rf_optimized.joblib')
+            st.session_state['model'] = model  # Store model in session state
+        else:
+            st.write("No model file found. Training a new model...")
+            model = None
     return model
+
 
 # Function to train and evaluate the model
 def train_new_model(df):
