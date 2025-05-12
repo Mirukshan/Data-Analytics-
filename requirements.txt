@@ -1,7 +1,1 @@
-pandas
-scikit-learn
-streamli
 seaborn
-matplotlib
-tensorflow
-joblib
