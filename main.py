@@ -26,7 +26,7 @@ import io # Required for capturing df.info() output
 # Ensure the file is shared publicly or handle authentication
 GOOGLE_DRIVE_MODEL_FILE_ID = "1ilukwSmeVZ7ywBCBt-9LS35JmoYGzMbe"
 MODEL_LOCAL_FILENAME = "random_forest_regressor_model.joblib"
-
+GITHUB_DATA_URL = "merged_data.csv"
 
 # --- Data Loading Function (Cached) ---
 @st.cache_data # Cache the data loading for performance
