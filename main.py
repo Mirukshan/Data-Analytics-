@@ -167,7 +167,7 @@ def page_visualizations():
 def real_time_aqi_prediction(model):
     st.title("Real-Time AQI Prediction")
 
-    feature_cols = ["PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "RAIN", "WSPM"]
+    feature_cols = ["PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "RAIN", "WSPM",'DEWP', 'hour', 'month', 'day', 'No', 'wd', 'station', 'PM2.5', 'year']
     input_data = {}
 
     st.markdown("### Enter Feature Values")
