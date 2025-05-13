@@ -33,7 +33,7 @@ GITHUB_DATA_URL = "merged_data.csv"
 def load_data(url):
     """Loads data from a given URL."""
     try:
-        df = pd.read_csv('merged_data.csv')
+        df = pd.read_csv(GITHUB_DATA_URL)
         st.success("Data loaded successfully from GitHub!")
         return df
     except Exception as e:
