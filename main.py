@@ -21,20 +21,19 @@ import io # Required for capturing df.info() output
 
 # --- Configuration ---
 # Replace with the raw URL of your merged_data.csv file on GitHub
-GITHUB_DATA_URL = "merged_data.csv"
 
 # Replace with the public shareable ID of your trained model file on Google Drive
 # Ensure the file is shared publicly or handle authentication
 GOOGLE_DRIVE_MODEL_FILE_ID = "1ilukwSmeVZ7ywBCBt-9LS35JmoYGzMbe"
 MODEL_LOCAL_FILENAME = "random_forest_regressor_model.joblib"
-
+GITHUB_DATA_URL = "merged_data.csv"
 
 # --- Data Loading Function (Cached) ---
 @st.cache_data # Cache the data loading for performance
 def load_data(url):
     """Loads data from a given URL."""
     try:
-        df = pd.read_csv(url)
+        df = pd.read_csv('merged_data.csv')
         st.success("Data loaded successfully from GitHub!")
         return df
     except Exception as e:
@@ -49,9 +48,7 @@ def load_model(file_id, output_path):
         # Check if the model file already exists locally
         if not os.path.exists(output_path):
             st.info(f"Downloading model from Google Drive (ID: {file_id})...")
-            # Add a progress bar for download
-            with st.spinner("Downloading model..."):
-                 gdown.download(id=file_id, output=output_path, quiet=False)
+            gdown.download(id=file_id, output=output_path, quiet=False)
             st.success("Model downloaded successfully!")
         else:
             st.info("Model file already exists locally. Loading...")
@@ -186,7 +183,6 @@ def eda_page(df):
              df_sample = df_cleaned.sample(sample_size, random_state=42)
              fig = sns.pairplot(df_sample[existing_pairplot_cols])
              st.pyplot(fig)
-             st.set_option('deprecation.showPyplotGlobalUse', False) # Suppress warning
         else:
              st.info("Not enough relevant numerical or 'Category' columns for pairplot.")
 
@@ -200,181 +196,100 @@ def modelling_prediction_page(df, model):
     st.title("🧠 Modelling and Prediction")
 
     if df is not None and model is not None:
-        st.subheader("Model Evaluation on Loaded Data")
+        st.subheader("Model Evaluation and Prediction")
 
         target_column = 'PM2.5'
 
         if target_column not in df.columns:
             st.error(f"Target column '{target_column}' not found in the loaded data.")
-            # Attempt to proceed with prediction input if data structure allows
-            st.warning("Cannot perform model evaluation without the target column.")
-            can_evaluate = False
-        else:
-             can_evaluate = True
-             # Drop rows where the target variable (PM2.5) is missing for evaluation
-             data_df_cleaned = df.dropna(subset=[target_column])
+            return
 
-             if data_df_cleaned.empty:
-                  st.warning("No data available for evaluation after dropping missing target values.")
-                  can_evaluate = False
-             else:
-                  # Define features (X) and target (y) for evaluation
-                  features = data_df_cleaned.columns.tolist()
-                  if 'NO.' in features:
-                      features.remove('NO.') # Remove index column
-                  features.remove(target_column)
+        # Drop rows where the target variable (PM2.5) is missing for evaluation
+        data_df_cleaned = df.dropna(subset=[target_column])
 
-                  X_eval = data_df_cleaned[features]
-                  y_eval = data_df_cleaned[target_column]
+        if data_df_cleaned.empty:
+             st.warning("No data available for evaluation after dropping missing target values.")
+             return
 
-                  # Ensure the feature columns in the data match the features the model was trained on
-                  # This is a crucial check! The columns in X_eval must match the columns
-                  # the model's preprocessor expects.
-                  # A robust way is to save the list of training columns and check against it here.
-                  # For this example, we assume the loaded data has the correct columns.
+        # Define features (X) and target (y) for evaluation
+        features = data_df_cleaned.columns.tolist()
+        if 'NO.' in features:
+            features.remove('NO.') # Remove index column
+        features.remove(target_column)
 
-                  try:
-                      # Make predictions using the loaded model
-                      y_pred_eval = model.predict(X_eval)
+        X_eval = data_df_cleaned[features]
+        y_eval = data_df_cleaned[target_column]
 
-                      # Evaluate the model
-                      mse = mean_squared_error(y_eval, y_pred_eval)
-                      rmse = np.sqrt(mse)
-                      r2 = r2_score(y_eval, y_pred_eval)
+        # Ensure the feature columns in the data match the features the model was trained on
+        # This is a crucial check! The columns in X_eval must match the columns
+        # the model's preprocessor expects.
+        # A robust way is to save the list of training columns and check against it here.
+        # For this example, we assume the loaded data has the correct columns.
 
-                      st.write("Evaluation Metrics:")
-                      st.write(f"Mean Squared Error (MSE): {mse:.4f}")
-                      st.write(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
-                      st.write(f"R-squared (R2): {r2:.4f}")
-
-                      # --- Display Sample Predictions vs Actual ---
-                      st.subheader("Sample Predictions vs Actual")
-                      results_df = pd.DataFrame({'Actual PM2.5': y_eval, 'Predicted PM2.5': y_pred_eval})
-                      st.dataframe(results_df.head()) # Display first few predictions
-
-                  except Exception as e:
-                      st.error(f"Error during model evaluation: {e}")
-                      can_evaluate = False
-
-
-        # --- Feature Importance Plot (if model is a pipeline with RF step) ---
-        if isinstance(model, Pipeline) and isinstance(model.steps[-1][1], RandomForestRegressor):
-             st.subheader("Feature Importance")
-             try:
-                 importances = model.named_steps['model'].feature_importances_
-
-                 # Attempt to get feature names from the preprocessor
-                 # This part can be complex depending on the preprocessor structure
-                 # Assuming the preprocessor is the first step in the pipeline
-                 preprocessor_step = model.named_steps['preprocessor']
-
-                 # Get names of features after preprocessing
-                 # This method works for ColumnTransformer
-                 try:
-                     all_feature_names = preprocessor_step.get_feature_names_out()
-                 except AttributeError:
-                     st.warning("Could not get processed feature names from the preprocessor. Feature importance plot may show generic names.")
-                     # Fallback: create generic names if get_feature_names_out fails
-                     all_feature_names = [f'feature_{i}' for i in range(len(importances))]
-
-
-                 # Sort feature importances
-                 indices = np.argsort(importances)[::-1]
-                 top_n = min(20, len(all_feature_names)) # Plot top 20 or fewer
-                 top_indices = indices[:top_n]
-
-                 fig, ax = plt.subplots(figsize=(12, 8))
-                 ax.set_title(f'Top {top_n} Feature Importances')
-                 ax.barh(range(top_n), importances[top_indices], align="center")
-                 # Ensure feature names list is long enough
-                 if len(all_feature_names) > 0:
-                     ax.set_yticks(range(top_n))
-                     ax.set_yticklabels([all_feature_names[i] for i in top_indices])
-                 ax.set_xlabel('Relative Importance')
-                 ax.invert_yaxis()
-                 st.pyplot(fig)
-
-             except Exception as e:
-                 st.error(f"Error plotting feature importance: {e}")
-        else:
-             st.info("Feature importance plot is available only if the loaded model is a scikit-learn Pipeline ending with a RandomForestRegressor.")
-
-
-        st.subheader("Make a Prediction")
-        st.write("Enter the feature values below to get a PM2.5 prediction.")
-
-        # --- Input Widgets for Features ---
-        # Identify the expected input features from the model's preprocessor
-        # This is a more robust way than hardcoding feature names
         try:
-            # Get the preprocessor step from the pipeline
-            preprocessor_step = model.named_steps['preprocessor']
+            # Make predictions using the loaded model
+            y_pred_eval = model.predict(X_eval)
 
-            # Get the names of the original features the preprocessor expects
-            # This requires knowing the structure of your ColumnTransformer
-            # Assuming the first transformer is numerical, second is categorical
-            numerical_input_features = preprocessor_step.transformers_[0][2]
-            categorical_input_features = preprocessor_step.transformers_[1][2]
+            # Evaluate the model
+            mse = mean_squared_error(y_eval, y_pred_eval)
+            rmse = np.sqrt(mse)
+            r2 = r2_score(y_eval, y_pred_eval)
 
-            input_values = {}
+            st.write("Evaluation Metrics on Loaded Data:")
+            st.write(f"Mean Squared Error (MSE): {mse:.4f}")
+            st.write(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
+            st.write(f"R-squared (R2): {r2:.4f}")
 
-            # Create input fields for numerical features
-            st.write("Numerical Features:")
-            for feature in numerical_input_features:
-                 # Set default value to 0 or a reasonable median/mean from training data if available
-                 input_values[feature] = st.number_input(f"Enter value for {feature}:", value=0.0, format="%.4f")
+            # --- Display Predictions (Optional) ---
+            st.subheader("Sample Predictions vs Actual")
+            results_df = pd.DataFrame({'Actual PM2.5': y_eval, 'Predicted PM2.5': y_pred_eval})
+            st.dataframe(results_df.head()) # Display first few predictions
 
-            # Create input fields for categorical features
-            st.write("Categorical Features:")
-            # Assuming 'Category' is the only categorical feature
-            if 'Category' in categorical_input_features:
-                 # You need the list of possible categories from your training data
-                 # A robust app would save these during training. For now, hardcode or derive from loaded data.
-                 # Deriving from loaded data:
-                 if df is not None and 'Category' in df.columns:
-                      categories = df['Category'].dropna().unique().tolist()
-                      input_values['Category'] = st.selectbox("Select Category:", categories)
-                 else:
-                      st.warning("Could not determine categories from loaded data. Cannot provide a selectbox for 'Category'.")
-                      # You might need a text input or skip if category is essential
-                      # For now, let's assume 'Category' is handled.
-                      # If 'Category' is essential and cannot be determined, you might need to stop here.
-
-
-            # --- Prediction Button ---
-            if st.button("Get Prediction"):
+            # --- Feature Importance Plot (if model is a pipeline with RF step) ---
+            if isinstance(model, Pipeline) and isinstance(model.steps[-1][1], RandomForestRegressor):
+                 st.subheader("Feature Importance")
                  try:
-                     # Prepare the input data for prediction
-                     # Create a DataFrame from the input values
-                     input_df = pd.DataFrame([input_values])
+                     importances = model.named_steps['model'].feature_importances_
 
-                     # Ensure the columns are in the correct order and match the training data features
-                     # This is critical! The order must match X_train used during model training.
-                     # A robust approach would save the list of training columns.
-                     # For now, we assume the order derived from preprocessor transformers is correct.
-                     # Combine numerical and categorical feature names in the order they appear in the original X
-                     # This requires knowing the original order before train_test_split
-                     # Let's reconstruct the assumed original order based on the preprocessor
-                     original_features_order = numerical_input_features.tolist() + categorical_input_features.tolist()
-                     input_df = input_df[original_features_order]
+                     # Attempt to get feature names from the preprocessor
+                     # This part can be complex depending on the preprocessor structure
+                     # Assuming the preprocessor is the first step in the pipeline
+                     preprocessor_step = model.named_steps['preprocessor']
+
+                     # Get names of features after preprocessing
+                     # This method works for ColumnTransformer
+                     try:
+                         all_feature_names = preprocessor_step.get_feature_names_out()
+                     except AttributeError:
+                         st.warning("Could not get processed feature names from the preprocessor. Feature importance plot may show generic names.")
+                         # Fallback: create generic names if get_feature_names_out fails
+                         all_feature_names = [f'feature_{i}' for i in range(len(importances))]
 
 
-                     # Make the prediction
-                     prediction = model.predict(input_df)
+                     # Sort feature importances
+                     indices = np.argsort(importances)[::-1]
+                     top_n = min(20, len(all_feature_names)) # Plot top 20 or fewer
+                     top_indices = indices[:top_n]
 
-                     # Display the prediction
-                     st.subheader("Predicted PM2.5")
-                     st.write(f"The predicted PM2.5 value is: **{prediction[0]:.4f}**")
+                     fig, ax = plt.subplots(figsize=(12, 8))
+                     ax.set_title(f'Top {top_n} Feature Importances')
+                     ax.barh(range(top_n), importances[top_indices], align="center")
+                     # Ensure feature names list is long enough
+                     if len(all_feature_names) > 0:
+                         ax.set_yticks(range(top_n))
+                         ax.set_yticklabels([all_feature_names[i] for i in top_indices])
+                     ax.set_xlabel('Relative Importance')
+                     ax.invert_yaxis()
+                     st.pyplot(fig)
 
                  except Exception as e:
-                     st.error(f"Error during prediction: {e}")
-                     st.info("Please ensure all input fields are filled correctly.")
+                     st.error(f"Error plotting feature importance: {e}")
+            else:
+                 st.info("Feature importance plot is available only if the loaded model is a scikit-learn Pipeline ending with a RandomForestRegressor.")
 
 
         except Exception as e:
-             st.error(f"Error setting up input fields: {e}")
-             st.warning("Could not dynamically determine input features from the model pipeline. Ensure your model pipeline structure is compatible.")
-
+            st.error(f"Error during prediction or evaluation: {e}")
 
     elif df is None:
         st.warning("Data could not be loaded. Please check the GitHub URL.")
@@ -412,7 +327,7 @@ def main():
 
     # --- Footer (Optional) ---
     st.sidebar.markdown("---")
-    st.sidebar.write("Developed by Your Mirukshan") 
+    st.sidebar.write("Developed by Mirukshan") 
 
 
 if __name__ == "__main__":
