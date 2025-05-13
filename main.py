@@ -33,7 +33,7 @@ MODEL_LOCAL_FILENAME = "random_forest_regressor_model.joblib"
 def load_data(url):
     """Loads data from a given URL."""
     try:
-        df = pd.read_csv('merged_data.csv)
+        df = pd.read_csv('merged_data.csv')
         st.success("Data loaded successfully from GitHub!")
         return df
     except Exception as e:
