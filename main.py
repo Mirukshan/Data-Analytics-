@@ -69,7 +69,7 @@ def load_model(file_id, output_path):
 
 def data_overview_page(df):
     """Displays data overview information."""
-    st.title("📊 Data Overview")
+    st.title("📚 Data Overview")
 
     if df is not None:
         st.subheader("Dataset Shape")
