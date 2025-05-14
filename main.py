@@ -193,7 +193,7 @@ def eda_page(df):
 
 def modelling_prediction_page(df, model):
     """Handles model loading, prediction, and evaluation."""
-    st.title("🧠 Modelling and Prediction")
+    st.title("🏅 Modelling and Prediction")
 
     if df is not None and model is not None:
         st.subheader("Model Evaluation and Prediction")
