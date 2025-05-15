@@ -108,7 +108,7 @@ def eda_page(df):
         if 'NO.' in numerical_columns: numerical_columns.remove('NO.')
         if target_column_name in numerical_columns: numerical_columns.remove(target_column_name)
         if numerical_columns:
-            selected_numerical_col = st.selectbox("Select a numerical column to plot distribution:", numerical_columns)
+            selected_numerical_col = st.selectbox("Select a numerical column to plot distribution:", numerical_columns, key="eda_num_dist_select")
             if selected_numerical_col:
                 fig, ax = plt.subplots(figsize=(8, 6))
                 sns.histplot(df_cleaned[selected_numerical_col], kde=True, bins=30, ax=ax)
@@ -128,7 +128,7 @@ def eda_page(df):
         else:
             st.info("Not enough numerical features for a correlation heatmap.")
 
-        categorical_col_for_boxplot = 'Category'
+        categorical_col_for_boxplot = 'Category' # Example, change if needed
         if categorical_col_for_boxplot in df_cleaned.columns:
             st.subheader(f"Distribution by {categorical_col_for_boxplot} (Boxplots)")
             numerical_cols_for_boxplot = df_cleaned.select_dtypes(include=np.number).columns.tolist()
@@ -138,7 +138,8 @@ def eda_page(df):
                 selected_numerical_col_boxplot = st.selectbox(
                     f"Select a numerical column for boxplot by {categorical_col_for_boxplot}:",
                     numerical_cols_for_boxplot,
-                    index=numerical_cols_for_boxplot.index(target_column_name) if target_column_name in numerical_cols_for_boxplot else 0
+                    index=numerical_cols_for_boxplot.index(target_column_name) if target_column_name in numerical_cols_for_boxplot else 0,
+                    key="eda_boxplot_select"
                 )
                 if selected_numerical_col_boxplot:
                     fig, ax = plt.subplots(figsize=(10, 7))
@@ -149,7 +150,7 @@ def eda_page(df):
             else:
                 st.info(f"No numerical features available for boxplots by {categorical_col_for_boxplot}.")
         else:
-            st.info(f"'{categorical_col_for_boxplot}' column not found for boxplots. Adjust column name if needed.")
+            st.info(f"'{categorical_col_for_boxplot}' column not found in the loaded data. Adjust column name if needed or ensure it's in your CSV.")
 
         st.subheader("Pairplot (Sampled Data)")
         st.write("Generating pairplot for a sample of the data due to potential size.")
@@ -157,9 +158,9 @@ def eda_page(df):
         if target_column_name not in pairplot_cols_options and target_column_name in df_cleaned.columns:
             pairplot_cols_options.append(target_column_name)
         default_pairplot_cols = [col for col in ['PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM', target_column_name] if col in df_cleaned.columns]
-        selected_pairplot_cols = st.multiselect("Select columns for Pairplot:", pairplot_cols_options, default=default_pairplot_cols[:5])
+        selected_pairplot_cols = st.multiselect("Select columns for Pairplot:", pairplot_cols_options, default=default_pairplot_cols[:5], key="eda_pairplot_multiselect")
         hue_col_pairplot = None
-        if categorical_col_for_boxplot in df_cleaned.columns:
+        if categorical_col_for_boxplot in df_cleaned.columns: # Use the same categorical column as for boxplot
             if st.checkbox(f"Use '{categorical_col_for_boxplot}' as hue for Pairplot?", key="pairplot_hue_checkbox"):
                 hue_col_pairplot = categorical_col_for_boxplot
         if selected_pairplot_cols and len(selected_pairplot_cols) > 1:
@@ -179,8 +180,8 @@ def modelling_prediction_page(df, model):
     st.title("🧠 Modelling and Prediction")
     st.write("Evaluate the model on loaded data and predict PM2.5 levels using custom inputs.")
 
-    if df is None:
-        st.warning("Data could not be loaded. Cannot perform evaluation or prediction.")
+    if df is None: # This df is the original loaded data (merged_data.csv)
+        st.warning("Data (merged_data.csv) could not be loaded. Cannot perform evaluation or prediction.")
         return
     if model is None:
          st.warning("Model could not be loaded. Cannot perform evaluation or prediction.")
@@ -190,23 +191,21 @@ def modelling_prediction_page(df, model):
     st.subheader("Model Evaluation on Loaded Data")
     target_column = 'PM2.5'
 
-    if target_column not in df.columns:
-        st.error(f"Target column '{target_column}' not found in the loaded data. Cannot evaluate or predict.")
+    if target_column not in df.columns: # Check in the original loaded df
+        st.error(f"Target column '{target_column}' not found in the loaded data (merged_data.csv). Cannot evaluate or predict.")
         return
 
-    # Use a distinct variable for data cleaned for evaluation
     data_df_cleaned_for_eval = df.dropna(subset=[target_column])
     if data_df_cleaned_for_eval.empty:
-         st.warning(f"No data available for evaluation/prediction after dropping rows with missing '{target_column}'.")
+         st.warning(f"No data available for evaluation/prediction after dropping rows with missing '{target_column}' from merged_data.csv.")
          return
 
     features_for_eval = [col for col in data_df_cleaned_for_eval.columns if col != target_column]
-    if 'NO.' in features_for_eval: # Assuming 'NO.' is an index or ID column
-        features_for_eval.remove('NO.')
+    if 'NO.' in features_for_eval: features_for_eval.remove('NO.')
     
     if not features_for_eval:
-        st.error("No feature columns found in loaded data (after excluding target and ID). Cannot evaluate model.")
-        X_eval = pd.DataFrame() # Empty dataframe
+        st.error("No feature columns found in loaded data (merged_data.csv, after excluding target and ID). Cannot evaluate model.")
+        X_eval = pd.DataFrame()
         y_eval = pd.Series(dtype='float64')
     else:
         X_eval = data_df_cleaned_for_eval[features_for_eval]
@@ -220,16 +219,15 @@ def modelling_prediction_page(df, model):
             r2 = r2_score(y_eval, y_pred_eval)
 
             st.write("Evaluation Metrics (on loaded data, after cleaning):")
-            col1, col2, col3 = st.columns(3)
-            col1.metric(label="Mean Squared Error (MSE)", value=f"{mse:.4f}")
-            col2.metric(label="Root Mean Squared Error (RMSE)", value=f"{rmse:.4f}")
-            col3.metric(label="R-squared (R²)", value=f"{r2:.4f}")
+            col1_eval, col2_eval, col3_eval = st.columns(3)
+            col1_eval.metric(label="Mean Squared Error (MSE)", value=f"{mse:.4f}")
+            col2_eval.metric(label="Root Mean Squared Error (RMSE)", value=f"{rmse:.4f}")
+            col3_eval.metric(label="R-squared (R²)", value=f"{r2:.4f}")
 
             st.subheader("Sample Predictions vs Actual (from loaded data)")
             results_df = pd.DataFrame({'Actual PM2.5': y_eval, 'Predicted PM2.5': y_pred_eval})
             st.dataframe(results_df.sample(min(10, len(results_df))).reset_index(drop=True))
 
-            # Feature Importance Plot
             if isinstance(model, Pipeline) and hasattr(model.steps[-1][1], 'feature_importances_'):
                  st.subheader("Feature Importance (from model)")
                  try:
@@ -239,7 +237,7 @@ def modelling_prediction_page(df, model):
                          try:
                              processed_feature_names = model.named_steps['preprocessor'].get_feature_names_out()
                          except Exception as e_feat_names:
-                             st.warning(f"Could not get feature names from preprocessor: {e_feat_names}. Using generic names.")
+                             st.warning(f"Could not get feature names from preprocessor for importance plot: {e_feat_names}. Using generic names.")
                      
                      if processed_feature_names is None or len(processed_feature_names) != len(importances):
                          processed_feature_names = [f'feature_{i}' for i in range(len(importances))]
@@ -255,8 +253,8 @@ def modelling_prediction_page(df, model):
                          ax.set_yticklabels([processed_feature_names[i] for i in top_indices])
                          ax.invert_yaxis()
                          ax.set_xlabel('Relative Importance')
-                         for bar in bars:
-                             ax.text(bar.get_width(), bar.get_y() + bar.get_height()/2, f'{bar.get_width():.3f}', va='center', ha='left')
+                         for bar_idx, bar_val in enumerate(bars): # Corrected variable name
+                             ax.text(bar_val.get_width(), bar_val.get_y() + bar_val.get_height()/2, f'{bar_val.get_width():.3f}', va='center', ha='left')
                          st.pyplot(fig)
                  except Exception as e_imp:
                      st.error(f"Error plotting feature importance: {e_imp}")
@@ -264,129 +262,112 @@ def modelling_prediction_page(df, model):
                  st.info("Feature importance plot is available if the model is a scikit-learn Pipeline with a final estimator that has 'feature_importances_'.")
         except Exception as e_eval:
             st.error(f"Error during model evaluation on loaded data: {e_eval}")
-            st.warning("This could happen if the loaded data's columns don't match what the model's preprocessor expects (e.g., missing 'year', 'month', 'day', 'station' if model was trained on them and they are not in merged_data.csv).")
+            st.warning("This could happen if the loaded data's columns don't match what the model's preprocessor expects.")
     else:
         st.info("Skipping model evaluation as no valid features were found in the loaded data.")
 
-
-    # --- Prediction Section (User Input) ---
+    # --- Prediction Section (User Input - Hardcoded Approach) ---
     st.divider()
     st.subheader("🎯 Make a PM2.5 Prediction")
     st.write("Enter the values for the features below to get a PM2.5 prediction.")
 
-    prediction_input_features = ['year', 'month', 'day', 'hour', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'wd', 'WSPM', 'station', 'Category']
-    st.caption(f"Input fields for prediction: {', '.join(prediction_input_features)}")
+    # This is the definitive list of features the model was trained on and expects for prediction.
+    prediction_input_features_ordered = ['year', 'month', 'day', 'hour', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'wd', 'WSPM', 'station', 'Category']
+    st.caption(f"Input fields for prediction: {', '.join(prediction_input_features_ordered)}")
 
     input_data = {}
-    num_input_cols = 3 
-    input_streamlit_cols = st.columns(num_input_cols)
-    feature_idx = 0
     
-    # Use data_df_cleaned_for_eval for populating defaults/options if columns exist
-    # This is the cleaned version of the loaded data.
-    df_for_defaults = data_df_cleaned_for_eval 
+    # Use the original loaded dataframe 'df' to attempt to populate selectbox options dynamically.
+    # If 'df' is None or columns are missing, hardcoded fallbacks will be used.
+    df_for_options = df 
 
-    for feature_name in prediction_input_features:
-        current_streamlit_col = input_streamlit_cols[feature_idx % num_input_cols]
-        feature_present_in_data = feature_name in df_for_defaults.columns
-        feature_series = df_for_defaults[feature_name] if feature_present_in_data else pd.Series(dtype='object') # Empty series if not present
+    st.markdown("#### Date and Time")
+    cols_datetime = st.columns(4)
+    current_year = datetime.date.today().year
+    input_data['year'] = cols_datetime[0].number_input('Year', min_value=current_year - 20, max_value=current_year + 5, value=current_year, step=1, format="%d", key="year_input")
+    input_data['month'] = cols_datetime[1].slider('Month', 1, 12, datetime.date.today().month, key="month_slider")
+    input_data['day'] = cols_datetime[2].slider('Day', 1, 31, datetime.date.today().day, key="day_slider")
+    input_data['hour'] = cols_datetime[3].slider('Hour of Day', 0, 23, 12, key="hour_slider")
 
-        # Specific handling for each feature type
-        if feature_name == 'year':
-            current_year = datetime.date.today().year
-            default_val = int(feature_series.mean()) if feature_present_in_data and pd.notna(feature_series.mean()) else current_year
-            input_data[feature_name] = current_streamlit_col.number_input(
-                label="Year", value=default_val, min_value=current_year - 20, max_value=current_year + 5, step=1, format="%d", key=f"num_{feature_name}"
-            )
-        elif feature_name == 'month':
-            default_val = int(feature_series.mean()) if feature_present_in_data and pd.notna(feature_series.mean()) else datetime.date.today().month
-            default_val = max(1, min(int(default_val), 12))
-            input_data[feature_name] = current_streamlit_col.slider(
-                label="Month", min_value=1, max_value=12, value=default_val, step=1, key=f"slider_{feature_name}"
-            )
-        elif feature_name == 'day':
-            default_val = int(feature_series.mean()) if feature_present_in_data and pd.notna(feature_series.mean()) else datetime.date.today().day
-            default_val = max(1, min(int(default_val), 31))
-            input_data[feature_name] = current_streamlit_col.slider(
-                label="Day", min_value=1, max_value=31, value=default_val, step=1, key=f"slider_{feature_name}"
-            )
-        elif feature_name == 'hour':
-            default_val = int(feature_series.mean()) if feature_present_in_data and pd.notna(feature_series.mean()) else 12
-            default_val = max(0, min(int(default_val), 23))
-            input_data[feature_name] = current_streamlit_col.slider(
-                label="Hour of Day", min_value=0, max_value=23, value=default_val, step=1, key=f"slider_{feature_name}"
-            )
-        elif feature_name in ['PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']:
-            default_val_num = 0.0
-            if feature_present_in_data and pd.api.types.is_numeric_dtype(feature_series) and pd.notna(feature_series.mean()):
-                default_val_num = float(feature_series.mean())
-            else: # Generic defaults if column not in data or not numeric
-                generic_defaults = {'PM10': 50.0, 'SO2': 10.0, 'NO2': 30.0, 'CO': 0.8, 'O3': 60.0, 'TEMP': 15.0, 'PRES': 1012.0, 'DEWP': 5.0, 'RAIN': 0.0, 'WSPM': 2.0}
-                default_val_num = generic_defaults.get(feature_name, 0.0)
-            input_data[feature_name] = current_streamlit_col.number_input(
-                label=f"{feature_name}", value=default_val_num, format="%.2f", key=f"num_{feature_name}"
-            )
-        elif feature_name in ['wd', 'station', 'Category']:
-            unique_vals = []
-            default_cat_index = 0
-            if feature_present_in_data:
-                unique_vals = sorted(list(set(str(val) for val in feature_series.unique() if pd.notna(val))))
-                if unique_vals and not feature_series.mode().empty:
-                    try:
-                        mode_val = str(feature_series.mode()[0])
-                        if mode_val in unique_vals:
-                            default_cat_index = unique_vals.index(mode_val)
-                    except: pass # Keep default_cat_index = 0
+    st.markdown("#### Pollutant Levels (µg/m³ or specific units)")
+    cols_pollutants1 = st.columns(3)
+    input_data['PM10'] = cols_pollutants1[0].number_input('PM10 (µg/m³)', value=50.0, format="%.2f", key="pm10_input")
+    input_data['SO2'] = cols_pollutants1[1].number_input('SO2 (µg/m³)', value=10.0, format="%.2f", key="so2_input")
+    input_data['NO2'] = cols_pollutants1[2].number_input('NO2 (µg/m³)', value=30.0, format="%.2f", key="no2_input")
+    
+    cols_pollutants2 = st.columns(3)
+    input_data['CO'] = cols_pollutants2[0].number_input('CO (mg/m³)', value=0.8, format="%.2f", key="co_input") # Often mg/m³
+    input_data['O3'] = cols_pollutants2[1].number_input('O3 (µg/m³)', value=60.0, format="%.2f", key="o3_input")
+    # Placeholder for the 6th pollutant input if needed, or adjust layout
+
+    st.markdown("#### Meteorological Conditions")
+    cols_meteo1 = st.columns(3)
+    input_data['TEMP'] = cols_meteo1[0].number_input('Temperature (°C)', value=15.0, format="%.1f", key="temp_input")
+    input_data['PRES'] = cols_meteo1[1].number_input('Pressure (hPa)', value=1012.0, format="%.1f", key="pres_input")
+    input_data['DEWP'] = cols_meteo1[2].number_input('Dewpoint (°C)', value=5.0, format="%.1f", key="dewp_input")
+
+    cols_meteo2 = st.columns(3) # Using 3 columns for WSPM, RAIN, and wd
+    input_data['WSPM'] = cols_meteo2[0].number_input('Wind Speed (m/s)', value=2.0, format="%.1f", key="wspm_input")
+    input_data['RAIN'] = cols_meteo2[1].number_input('Rain (mm/h)', value=0.0, format="%.1f", key="rain_input")
+    
+    # Wind Direction (wd)
+    wd_options = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'NNE', 'ENE', 'ESE', 'SSE', 'SSW', 'WSW', 'WNW', 'NNW', 'CALM', 'Variable'] # Common options
+    if df_for_options is not None and 'wd' in df_for_options.columns:
+        unique_wd = sorted(list(set(str(val) for val in df_for_options['wd'].unique() if pd.notna(val))))
+        if unique_wd: wd_options = unique_wd
+    input_data['wd'] = cols_meteo2[2].selectbox('Wind Direction (wd)', wd_options, key="wd_select")
+
+
+    st.markdown("#### Location Information")
+    cols_location = st.columns(2)
+    # Station
+    station_options = [f"Station_{i}" for i in range(1, 13)] # Default Aotizhongxin to Wanshouxigong (12 stations)
+    if df_for_options is not None and 'station' in df_for_options.columns:
+        unique_stations = sorted(list(set(str(val) for val in df_for_options['station'].unique() if pd.notna(val))))
+        if unique_stations: station_options = unique_stations
+    input_data['station'] = cols_location[0].selectbox('Monitoring Station', station_options, key="station_select")
+
+    # Category
+    category_options = ['Urban', 'Suburban', 'Rural', 'Industrial', 'Traffic', 'Residential', 'Background'] # Common categories
+    if df_for_options is not None and 'Category' in df_for_options.columns: # Assuming 'Category' with capital C
+        unique_categories = sorted(list(set(str(val) for val in df_for_options['Category'].unique() if pd.notna(val))))
+        if unique_categories: category_options = unique_categories
+    elif df_for_options is not None and 'category' in df_for_options.columns: # Fallback to lowercase 'category'
+        unique_categories = sorted(list(set(str(val) for val in df_for_options['category'].unique() if pd.notna(val))))
+        if unique_categories: category_options = unique_categories
+    input_data['Category'] = cols_location[1].selectbox('Location Category', category_options, key="category_select")
+
+
+    if st.button("Predict PM2.5", key="predict_button_hardcoded"):
+        # Create DataFrame from input_data, ensuring the order matches prediction_input_features_ordered
+        try:
+            input_df = pd.DataFrame([input_data])[prediction_input_features_ordered]
             
-            if not unique_vals: # Fallback options
-                if feature_name == 'wd': unique_vals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'NNE', 'ENE', 'ESE', 'SSE', 'SSW', 'WSW', 'WNW', 'NNW', 'CALM']
-                elif feature_name == 'station': unique_vals = [f"Station{chr(65+i)}" for i in range(5)] # StationA to StationE
-                elif feature_name == 'Category': unique_vals = ['Urban', 'Suburban', 'Rural', 'Industrial', 'Traffic']
-            
-            if unique_vals:
-                input_data[feature_name] = current_streamlit_col.selectbox(
-                    label=f"{feature_name}", options=unique_vals, index=default_cat_index, key=f"select_{feature_name}"
-                )
-            else: # Should be rare with fallbacks
-                 input_data[feature_name] = current_streamlit_col.text_input(label=f"{feature_name} (Enter manually)", key=f"text_{feature_name}")
-        else: # Should not happen if prediction_input_features is exhaustive
-            input_data[feature_name] = current_streamlit_col.text_input(label=f"Unknown feature: {feature_name}", key=f"unknown_{feature_name}")
+            # Attempt to convert columns to numeric where appropriate, if they are not already
+            # This is a safeguard. Ideally, Streamlit inputs provide correct types.
+            numerical_cols_for_conversion = ['year', 'month', 'day', 'hour', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']
+            for col in numerical_cols_for_conversion:
+                if col in input_df.columns:
+                    input_df[col] = pd.to_numeric(input_df[col], errors='coerce')
 
-        feature_idx += 1
+            if input_df.isnull().any().any():
+                st.error("Some numerical inputs could not be converted to numbers or are missing. Please check your entries.")
+                # Show which columns have NaN
+                nan_cols = input_df.columns[input_df.isnull().any()].tolist()
+                st.text(f"Problematic columns: {', '.join(nan_cols)}")
 
-    if st.button("Predict PM2.5", key="predict_button"):
-        valid_inputs = True
-        for feature_name in prediction_input_features:
-            if input_data.get(feature_name) is None :
-                st.error(f"Input for '{feature_name}' is missing or invalid.")
-                valid_inputs = False
-                break
-        
-        if valid_inputs:
-            try:
-                input_df = pd.DataFrame([input_data])[prediction_input_features] # Ensure correct order
-                
-                # Attempt to convert columns to numeric where appropriate, if they are not already
-                # This is a safeguard. Ideally, Streamlit inputs provide correct types.
-                for col in ['year', 'month', 'day', 'hour', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']:
-                    if col in input_df.columns:
-                        input_df[col] = pd.to_numeric(input_df[col], errors='coerce')
+            else:
+                prediction = model.predict(input_df)
+                st.success(f"Predicted PM2.5 Concentration: **{prediction[0]:.2f} µg/m³**")
 
-                # Check for NaNs after conversion (e.g. if a text input for a number was non-numeric)
-                if input_df.isnull().any().any():
-                    st.error("Some numerical inputs could not be converted to numbers. Please check your entries.")
-                else:
-                    prediction = model.predict(input_df)
-                    st.success(f"Predicted PM2.5 Concentration: **{prediction[0]:.2f} µg/m³**")
-
-            except Exception as e_pred:
-                st.error(f"An error occurred during prediction: {e_pred}")
-                st.warning("Ensure all input values are valid. The model's preprocessor might also expect specific data types or ranges.")
-                if 'input_df' in locals():
-                    st.caption("Data sent for prediction (first row):")
-                    st.dataframe(input_df.head(1))
-                    st.caption("Data types of input sent:")
-                    st.text(input_df.dtypes)
+        except Exception as e_pred:
+            st.error(f"An error occurred during prediction: {e_pred}")
+            st.warning("Ensure all input values are valid. The model's preprocessor might also expect specific data types or ranges.")
+            if 'input_df' in locals(): # Check if input_df was created
+                st.caption("Data sent for prediction (first row):")
+                st.dataframe(input_df.head(1))
+                st.caption("Data types of input sent:")
+                st.text(input_df.dtypes)
 
 # --- Main Application Logic ---
 def main():
@@ -395,7 +376,7 @@ def main():
     page_options = ["Data Overview", "Exploratory Data Analysis (EDA)", "Modelling and Prediction"]
     page = st.sidebar.radio("Go to", page_options, key="nav_radio")
 
-    data_df = load_data(DATA_FILENAME)
+    data_df = load_data(DATA_FILENAME) # This is merged_data.csv
     model = load_model(GOOGLE_DRIVE_MODEL_FILE_ID, MODEL_LOCAL_FILENAME)
 
     if page == "Data Overview":
@@ -403,10 +384,12 @@ def main():
     elif page == "Exploratory Data Analysis (EDA)":
         eda_page(data_df)
     elif page == "Modelling and Prediction":
+        # Pass the loaded 'data_df' (merged_data.csv) to the modelling page
+        # This df will be used for evaluation and to attempt to populate selectbox options
         modelling_prediction_page(data_df, model)
 
     st.sidebar.markdown("---")
-    st.sidebar.info("Air Quality App v1.2")
+    st.sidebar.info("Air Quality App v1.3") # Incremented version
 
 if __name__ == "__main__":
     main()
